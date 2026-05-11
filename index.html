@@ -849,29 +849,25 @@
 
       <div class="tab-panel" id="tab-setup">
 
-        <!-- JSONBIN SETUP -->
+        <!-- GOOGLE SHEETS SETUP -->
         <div class="setup-box">
-          <h3>🗄️ Step 1 — Set Up Your Database (JSONBin)</h3>
+          <h3>🗄️ Step 1 — Connect Google Sheets (Subscriber Database)</h3>
           <div class="highlight-box">
-            This stores all your subscribers online so both you and Ugochi can see them from any phone or device.
+            This saves every subscriber directly into a Google Sheet. You and Ugochi can open it on any phone and see everyone who submitted the scorecard — live.
           </div>
           <ol class="step-guide">
-            <li>Go to <strong>jsonbin.io</strong> on your phone → Sign up free</li>
-            <li>Once inside click <strong>CREATE BIN</strong></li>
-            <li>Paste this inside the bin: <strong>[]</strong> (just empty square brackets) → click Create</li>
-            <li>Copy the <strong>BIN ID</strong> shown in the URL (looks like 64abc123...)</li>
-            <li>Go to <strong>API Keys</strong> in the menu → copy your Master Key</li>
-            <li>Paste both below and click Save ✅</li>
+            <li>Open <strong>Google Sheets</strong> → create a new sheet → name the first sheet tab <strong>Subscribers</strong></li>
+            <li>In Row 1 add these headers exactly: <strong>name | email | score | tierTitle | date</strong></li>
+            <li>Go to <strong>Extensions → Apps Script</strong></li>
+            <li>Delete everything there and paste the script Wisdom gave you → click <strong>Save</strong></li>
+            <li>Click <strong>Deploy → New Deployment → Web App</strong></li>
+            <li>Set <em>Execute as</em>: <strong>Me</strong> · Set <em>Who has access</em>: <strong>Anyone</strong> → Deploy</li>
+            <li>Copy the <strong>Web App URL</strong> and paste below → Save ✅</li>
           </ol>
-          <label style="font-size:13px;font-weight:500;color:var(--dark);display:block;margin-bottom:6px">JSONBin Master
-            Key</label>
-          <input class="inp" type="password" id="jb-key" placeholder="$2a$10$..." />
-          <label
-            style="font-size:13px;font-weight:500;color:var(--dark);display:block;margin-bottom:6px;margin-top:8px">JSONBin
-            Bin ID</label>
-          <input class="inp" type="text" id="jb-bin" placeholder="64abc123def456..." />
-          <button class="btn btn-primary" style="margin-top:8px" onclick="saveJSONBin()">Save Database Config</button>
-          <div class="saving" id="jb-saved">✅ Saved!</div>
+          <label style="font-size:13px;font-weight:500;color:var(--dark);display:block;margin-bottom:6px">Google Apps Script Web App URL</label>
+          <input class="inp" type="text" id="sheet-url" placeholder="https://script.google.com/macros/s/..." />
+          <button class="btn btn-primary" style="margin-top:8px" onclick="saveSheetUrl()">Save & Connect ✅</button>
+          <div class="saving" id="sheet-saved">✅ Connected! Subscribers will now save to your Google Sheet.</div>
         </div>
 
         <!-- ANTHROPIC KEY -->
@@ -885,27 +881,6 @@
           <input class="inp" type="password" id="ant-key" placeholder="sk-ant-..." />
           <button class="btn btn-primary" style="margin-top:8px" onclick="saveAnthropic()">Save Anthropic Key</button>
           <div class="saving" id="ant-saved">✅ Saved!</div>
-        </div>
-
-        <!-- BREVO -->
-        <div class="setup-box">
-          <h3>📬 Step 3 — Brevo (for Sending Emails)</h3>
-          <ol class="step-guide">
-            <li>Go to <strong>brevo.com</strong> → Sign up free</li>
-            <li>Create 3 lists: <strong>Starters, Building, Champions</strong></li>
-            <li>Copy each list ID from the URL</li>
-            <li>Go to <strong>Settings → API Keys</strong> → Copy your key</li>
-            <li>Paste below and save ✅</li>
-          </ol>
-          <label style="font-size:13px;font-weight:500;color:var(--dark);display:block;margin-bottom:6px">Brevo API
-            Key</label>
-          <input class="inp" type="password" id="brevo-key" placeholder="xkeysib-..." />
-          <label
-            style="font-size:13px;font-weight:500;color:var(--dark);display:block;margin-bottom:6px;margin-top:8px">Brevo
-            List IDs (Starter, Building, Champion)</label>
-          <input class="inp" type="text" id="brevo-lists" placeholder="3, 4, 5" />
-          <button class="btn btn-primary" style="margin-top:8px" onclick="saveBrevo()">Save Brevo Config</button>
-          <div class="saving" id="brevo-saved">✅ Saved!</div>
         </div>
 
       </div>
@@ -934,22 +909,22 @@
     const getSectionStart = (si) => qMap.find(m => m.si === si)?.gi ?? 0;
     const isSectionDone = (si) => SECTIONS[si].questions.every((_, qi) => { const m = qMap.find(x => x.si === si && x.qi === qi); return m && answers[m.gi] !== undefined; });
 
-    // ── JSONBIN HELPERS ──
-    function getJBConfig() { return { key: localStorage.getItem('jb_key'), bin: localStorage.getItem('jb_bin') }; }
+    // ── GOOGLE SHEETS HELPERS ──
+    function getSheetUrl() { return localStorage.getItem('sheet_url') || ''; }
     async function loadSubscribers() {
-      const { key, bin } = getJBConfig();
-      if (!key || !bin) return [];
+      const url = getSheetUrl();
+      if (!url) return [];
       try {
-        const r = await fetch('https://api.jsonbin.io/v3/b/' + bin + '/latest', { headers: { 'X-Master-Key': key, 'X-Bin-Meta': 'false' } });
+        const r = await fetch(url, { method: 'GET' });
         const d = await r.json();
         return Array.isArray(d) ? d : [];
       } catch { return []; }
     }
-    async function saveSubscribers(subs) {
-      const { key, bin } = getJBConfig();
-      if (!key || !bin) return;
+    async function saveSubscriber(sub) {
+      const url = getSheetUrl();
+      if (!url) return;
       try {
-        await fetch('https://api.jsonbin.io/v3/b/' + bin, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Master-Key': key }, body: JSON.stringify(subs) });
+        await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(sub) });
       } catch (e) { console.log('Save error', e); }
     }
 
@@ -995,27 +970,13 @@
       showScreen('result');
       setTimeout(() => { document.getElementById('r-bar').style.width = pct + '%'; }, 200);
 
-      // Save to JSONBin
+      // Save to Google Sheets
       try {
-        const subs = await loadSubscribers();
         const sub = { name, email, score, tierTitle: tier.title, tierColor: tier.color, date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) };
-        const idx = subs.findIndex(s => s.email === email);
-        if (idx >= 0) subs[idx] = sub; else subs.push(sub);
-        await saveSubscribers(subs);
+        await saveSubscriber(sub);
       } catch (e) { }
-
-      // Send to Brevo
-      sendToBrevo(name, email, score, tier);
     }
 
-    function sendToBrevo(name, email, score, tier) {
-      const key = localStorage.getItem('brevo_key'); const listsRaw = localStorage.getItem('brevo_lists');
-      if (!key || !listsRaw) return;
-      const ids = listsRaw.split(',').map(x => parseInt(x.trim())).filter(Boolean);
-      if (ids.length < 3) return;
-      const listId = score <= 55 ? ids[0] : score <= 77 ? ids[1] : ids[2];
-      fetch('https://api.brevo.com/v3/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json', 'api-key': key }, body: JSON.stringify({ email, attributes: { FIRSTNAME: name, SCORE: score, TIER: tier.title }, listIds: [listId], updateEnabled: true }) }).catch(() => { });
-    }
 
     function retake() { answers = {}; secIdx = 0; document.getElementById('inp-name').value = ''; document.getElementById('inp-email').value = ''; showScreen('quiz'); renderSection(); }
 
@@ -1047,33 +1008,21 @@
     function switchTab(name, el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active')); el.classList.add('active'); document.getElementById('tab-' + name).classList.add('active'); }
 
     // ── SETUP ──
-    function saveJSONBin() {
-      const k = document.getElementById('jb-key').value.trim();
-      const b = document.getElementById('jb-bin').value.trim();
-      if (k) localStorage.setItem('jb_key', k);
-      if (b) localStorage.setItem('jb_bin', b);
-      const el = document.getElementById('jb-saved'); el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 2500);
+    function saveSheetUrl() {
+      const u = document.getElementById('sheet-url').value.trim();
+      if (u) localStorage.setItem('sheet_url', u);
+      const el = document.getElementById('sheet-saved'); el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 2500);
+      loadAdminData();
     }
     function saveAnthropic() {
       const k = document.getElementById('ant-key').value.trim();
       if (k) localStorage.setItem('ant_key', k);
       const el = document.getElementById('ant-saved'); el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 2500);
     }
-    function saveBrevo() {
-      const k = document.getElementById('brevo-key').value.trim();
-      const l = document.getElementById('brevo-lists').value.trim();
-      if (k) localStorage.setItem('brevo_key', k);
-      if (l) localStorage.setItem('brevo_lists', l);
-      const el = document.getElementById('brevo-saved'); el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 2500);
-    }
     function loadSavedKeys() {
-      const jbk = localStorage.getItem('jb_key'); const jbb = localStorage.getItem('jb_bin');
-      const ak = localStorage.getItem('ant_key'); const bk = localStorage.getItem('brevo_key'); const bl = localStorage.getItem('brevo_lists');
-      if (jbk) document.getElementById('jb-key').value = jbk;
-      if (jbb) document.getElementById('jb-bin').value = jbb;
+      const su = localStorage.getItem('sheet_url'); const ak = localStorage.getItem('ant_key');
+      if (su) document.getElementById('sheet-url').value = su;
       if (ak) document.getElementById('ant-key').value = ak;
-      if (bk) document.getElementById('brevo-key').value = bk;
-      if (bl) document.getElementById('brevo-lists').value = bl;
     }
 
     // ── NEWSLETTER ──
